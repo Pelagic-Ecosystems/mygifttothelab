@@ -1,0 +1,287 @@
+---
+title: "r workshop"
+author: "David Costalago"
+date: "21 de enero de 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Creating objects in r
+```{r setup, warning = FALSE}
+library(tinytex)
+```
+
+# Day 1
+
+```{r arithmetic}
+3 + 5
+
+weight_kg <- 55
+```
+
+## Vectors and data types
+
+This section describes some basic data types in r
+
+```{r}
+
+weight_g <- c(50,60,65,82)
+
+animals <- c("mouse", "rat", "dog")
+
+```
+
+### Data Frames
+
+Next we look at the structure of Data Frames
+
+```{r}
+library(tidyverse)
+
+#utils::download.file() #this forces r to use the donwload.file function within the package ´utils´
+
+download.file(url="https://ndownloader.figshare.com/files/2292169", destfile = "read_data/portal_data_joined.csv")
+
+library(here) # This package makes working directories and file paths easy
+
+surveys <- read_csv(here("read_data", "portal_data_joined.csv"))
+
+surveys
+
+dim(surveys)
+
+summary(surveys)
+```
+
+### Indexing and subsetting data frames
+
+First lets use square bracket subsetting.
+
+
+```{r}
+
+# First define the row coordinate, and then the column. 
+surveys[1,1]
+
+# Defining only which column we want  will return a data frame
+surveys[1]
+
+surveys[1:3, 7] #gives rows 1 to 3 in column 7
+
+surveys[,-7] #all the rows and columns except column 7
+surveys[, -c(1:5)]
+```
+
+## Data manipulation
+Square brackets are good when the coordinates of your data frame are fixed. But what happens if the coordinates change (e.g. you created new columns)
+
+Key functions for data manipulation in dplyr:
+
+* select(): subsetting columns
+* filter(): subsets of rows based on condiitons
+* mutate(): create new columns, nased on information from other columns
+* group_by(): creates groups based on categorical data in a column
+* summarize(): creates summary stats on grouped data
+* arrange(): sort results
+* count(): gives a count of discrete values
+
+```{r}
+select(surveys, plot_id, species_id, weight)
+
+#Negative subsetting
+select(surveys, -record_id)
+
+
+filter(surveys, year == 1995,
+       species_id == "NL")
+```
+
+## Pipes
+
+Pipes allow you yo chain together dplyr functions.
+
+%>% or ctrl-shift-m
+
+```{r}
+# Write multiple arguments in a sentence using pipes
+surveys %>% 
+  filter(weight < 5) %>% 
+  select(species_id, sex, weight)
+
+surveys_sml <- surveys %>% 
+   filter(weight < 5) %>% 
+  select(species_id, sex, weight)
+
+```
+
+
+* Challenge #1
+
+Using pipes, subset the surveys dataframe to include animals collected before 1995 and retain only the columns year, sex and weight.
+
+```{r challenge 1}
+
+surveys_animal_pre1995 <- surveys %>% 
+   filter(year < 1995) %>% 
+  select(year, sex, weight)
+
+```
+
+```{r}
+surveys %>% 
+  mutate(weight_kg = weight / 1000,
+         weight_kg2 = weight_kg * 2)
+
+surveys <- surveys %>% 
+  drop_na(weight) %>% 
+  mutate(mean_weight = mean(weight))
+
+mean(surveys$weight)
+```
+
+
+* Challenge #2
+
+Contains only the species_id column, has a new column called hindfoot_half that are half the hindfoot_length values. Also, in the new hinfoot_half column there are no NAs and values are less than 30
+
+```{r}
+surveys_new <- surveys %>% 
+  mutate(hindfoot_half = hindfoot_length / 2) %>% 
+  drop_na(hindfoot_half) %>% 
+  filter(hindfoot_half < 30) %>% 
+  select(species_id)
+
+
+```
+
+
+```{r}
+surveys %>% 
+  group_by(sex, species_id) %>% 
+  summarize(mean_weight = mean(weight, na.rm = TRUE),
+            min_weight = min(weight, na.rm = TRUE)) %>% 
+  arrange(min_weight) # arrange is done by ascending order by default
+
+```
+
+```{r}
+surveys %>% 
+  count(sex) #handy to get samples sizes for different groups
+
+# the above code is synonomous
+surveys %>%  
+  group_by(sex) %>% 
+  summarize(count = n ())
+```
+
+* Challenge #3
+
+1. How many animals were caught in each plot_type surveyed.
+
+2. Use group_by and summarize to find the mean, min and max of hindfoot length (using species_id) for each species. Also, add the number of obervacions (hint: see ?n).
+
+3. What was the heaviest animal measured in each year? Return the columns year, genus, species_id, and weight
+
+```{r}
+#1
+surveys %>% 
+  count(plot_type)
+
+#2
+surveys %>%  
+  group_by(species_id) %>% 
+  summarize(count = n (),
+            mean(hindfoot_length, na.rm = TRUE),
+            max(hindfoot_length, na.rm = TRUE),
+            min(hindfoot_length, na.rm = TRUE))
+
+#3
+surveys %>% 
+  group_by(year, genus, species_id) %>% 
+  summarize(max_weight = max(weight, na.rm = TRUE)) %>% 
+  arrange(desc(max_weight)) 
+
+max_weights <- surveys %>% 
+  drop_na(weight) %>% 
+  group_by(year) %>% 
+  filter(weight == max(weight)) %>% 
+  select(year, genus, species, weight) %>% 
+  arrange(year) %>% 
+  unique() 
+```
+
+## Export our data
+```{r}
+write_csv(max_weights, here("write_data", "max_weights.csv"))
+```
+
+# Day 2
+
+## Tidy data in Spreadsheets
+
+Today we look at tidying data
+
+The functions we use for tidying data are:
+
+* tidyr::spread()
+* tidyr::gather()
+
+### spread()
+
+spread() takes 3 principal arguments:
+1. the data
+2. the _key_ column variable will become the new column names
+3. the value column variable, which will fill the new column variables
+
+We're going to use the surveys dataset
+
+```{r}
+library(readr)
+surveys <- read_csv(here("read_data", "surveys.csv"))
+
+# Create a wide data format of surveys using spread()
+
+surveys_gw <- surveys %>% 
+  drop_na(weight) %>% 
+  group_by(species_id) %>% 
+  summarize(mean_weight = mean(weight))
+
+str(surveys_gw)
+
+# Now we want to sprread te data set out into a wide format
+
+wide_surveys_gw <- surveys_gw %>% 
+  spread(key = species_id, value = mean_weight)
+
+# Now, using gather() we are going back to long from the wide data set we just created.
+
+```
+
+### gather
+
+gather() takes 4 arguments:
+1. data
+2. key
+3. value
+4. names of columns we use to fill the key variable (or drop)
+
+```{r}
+long_surveys <- wide_surveys_gw %>% 
+  gather(key = species_id, value = mean_weight)
+```
+
+
+## Sending Tidy Data
+
+### Changelog
+
+* Update your changelog with changes you make to your raw data, or other significant changes or additions to your projects!
+
+### Data Dictionary
+
+
+```{r}
+tigy_gsi <- read_csv(here("write_data", "tidy_gsi.csv"))
+```
+
